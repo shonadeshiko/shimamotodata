@@ -33,26 +33,65 @@ VECTORS_DIR = PROCESSED_DIR / "vectors"
 DST_CRS = "EPSG:4326"
 
 # id, 元ファイル名, 表示名, 単位, 説明, リサンプリング方法
-# 例:
-# {
-#     "id": "shimamoto_paddy_ratio",
-#     "src": "水田の占有率_島本町.tif",
-#     "name": "水田の占有率（島本町）",
-#     "unit": "比率(0-1)",
-#     "description": "グリッド内における水田の占有割合。値が高いほど水田が多い。",
-#     "resampling": Resampling.bilinear,
-# },
-RASTER_DEFS: list[dict] = []
+RASTER_DEFS: list[dict] = [
+    {
+        "id": "shimamoto_paddy_ratio",
+        "src": "05_水田の占有率_27_大阪府.tif",
+        "name": "水田の占有率（大阪府）",
+        "unit": "比率(0-1)",
+        "description": "グリッド内における水田の占有割合。値が高いほど水田が多い。大阪府域全体のデータ。",
+        "resampling": Resampling.bilinear,
+    },
+    {
+        "id": "shimamoto_hand_rank",
+        "src": "HANDランク_島本町.tif",
+        "name": "HANDランク（島本町）",
+        "unit": "ランク(1-5)",
+        "description": "最近接水路との比高(HAND)による区分。値が大きいほど水路との比高が小さい(水路に近い)。",
+        "resampling": Resampling.nearest,
+    },
+    {
+        "id": "shimamoto_dev_pressure_2011_2022",
+        "src": "開発圧v2_2011-2022_島本町.tif",
+        "name": "開発圧 2011-2022 v2（島本町）",
+        "unit": "区分(-1,0,+1)",
+        "description": "2011年から2022年にかけての開発圧の変化区分(v2データ)。+1:都市化(開発圧増加) 0:変化なし -1:開発後退(緑地化等)。",
+        "resampling": Resampling.nearest,
+    },
+    {
+        "id": "shimamoto_twi_rank",
+        "src": "TWIランク_島本町.tif",
+        "name": "TWIランク（島本町）",
+        "unit": "ランク(1-5)",
+        "description": "地形的湿潤度指数(TWI)に基づく浸水・湛水しやすさの目安ランク。値が大きいほど水が集まりやすい地形。",
+        "resampling": Resampling.nearest,
+    },
+    {
+        "id": "shimamoto_gi_terrain_score",
+        "src": "GI地形スコア_島本町.tif",
+        "name": "GI地形スコア（島本町）",
+        "unit": "スコア(1.0-5.0)",
+        "description": "地形条件から見たグリーンインフラ(GI)適性の統合スコア(連続値)。",
+        "resampling": Resampling.bilinear,
+        "uint8_scale": 10,  # 10倍してuint8化(小数点以下1桁の精度を保持)。frontendで10で割り戻す
+    },
+]
 
 # id, 元ファイル名, 表示名, 説明
-# 例:
-# {
-#     "id": "shimamoto_mesh500m_gi",
-#     "src": "メッシュ500m_GI統合_島本町.gpkg",
-#     "name": "500mメッシュ GI統合スコア（島本町）",
-#     "description": "500mメッシュ単位のグリーンインフラ(GI)関連スコア等の統合データ。",
-# },
-VECTOR_DEFS: list[dict] = []
+VECTOR_DEFS: list[dict] = [
+    {
+        "id": "shimamoto_boundary",
+        "src": "島本町域_行政界+1kmバッファ.gpkg",
+        "name": "島本町域（行政界+1kmバッファ）",
+        "description": "島本町の行政界に1kmのバッファを加えた範囲のポリゴン。",
+    },
+    {
+        "id": "shimamoto_mesh500m_gi",
+        "src": "メッシュ500m_GI統合v2_島本町.gpkg",
+        "name": "500mメッシュ GI統合スコア（島本町）",
+        "description": "500mメッシュ単位のグリーンインフラ(GI)関連スコア・開発圧・土地被覆割合等の統合データ(v2)。",
+    },
+]
 
 
 def reproject_to_cog(

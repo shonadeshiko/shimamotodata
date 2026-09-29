@@ -4,8 +4,7 @@
 結果を静的サイトとして公開するためのリポジトリです。
 
 姉妹リポジトリ [gisdata](https://github.com/shonadeshiko/gisdata)（千葉県印旛沼流域版）の
-コード構成をコピーし、地域名を置き換えた雛形です。**実データはまだ
-投入されていません**（後日取り込み予定）。
+コード構成をコピーし、地域名を置き換えて作成。島本町の実データを取り込み済み。
 
 ## 設計方針
 
@@ -23,7 +22,7 @@
 shimamotodata/
 ├── pipeline/
 │   ├── process/
-│   │   ├── ingest_shimamoto_data.py   # 島本町の実データ取り込み(雛形、RASTER_DEFS等は空)
+│   │   ├── ingest_shimamoto_data.py   # 島本町の実データ取り込み
 │   │   └── ingest_gsi_elevation.py    # 国土地理院 標高タイル取得
 │   └── requirements.txt
 ├── data/
@@ -47,12 +46,10 @@ pip install -r requirements.txt
 python process/ingest_shimamoto_data.py   # 元データが data/raw/shimamoto/ にある場合
 ```
 
-`pipeline/process/ingest_shimamoto_data.py` の `RASTER_DEFS` /
-`VECTOR_DEFS` は現在空（`[]`）。実データが届いたら、
-gisdataの `ingest_chiba_data.py` の書き方を参考に定義を追加していく。
-連続値のデータをuint8で軽量化したい場合は `uint8_scale` を指定する
-（例: 10を指定すると値を10倍してuint8(0-255)に丸めて保存し、
-frontend側で10で割り戻す）。
+新しいデータを追加したい場合は `pipeline/process/ingest_shimamoto_data.py` の
+`RASTER_DEFS` / `VECTOR_DEFS` に定義を1つ追加するだけでよい。連続値のデータを
+uint8で軽量化したい場合は `uint8_scale` を指定する（例: 10を指定すると
+値を10倍してuint8(0-255)に丸めて保存し、frontend側で10で割り戻す）。
 
 ## フロントエンドの確認
 
@@ -79,9 +76,9 @@ python -m http.server 8000
 
 `web/index.html` の `MESH_SCORES` は、gisdata側の500mメッシュ
 (GI保全スコア・GI開発圧スコア・優先度ランク・市街地率・森林率)の
-属性名をそのまま踏襲した雛形。島本町のメッシュデータが同じ属性名で
-作られる前提になっているため、**実データが届いたらフィールド名・
-domain(色分けの値range)・凡例が合っているか確認すること**。
+属性名を踏襲しているが、島本町の実メッシュデータ(`メッシュ500m_GI統合v2_島本町.gpkg`)
+も同じ属性名(`gi_conservation_score`/`gi_pressure_score`/`priority_rank`/
+`urban_frac`/`forest_frac`等)で作られていることを確認済み。
 
 ## 標高データ（国土地理院 標高タイル）について
 
@@ -105,10 +102,24 @@ pushでは実行せず、GitHub Actionsの `Ingest GSI Elevation Data`
 一度取得したラスタはブラウザ内にキャッシュされ、2回目以降のクリックで
 再取得しないようになっている。
 
+## 島本町 実データについて
+
+`pipeline/process/ingest_shimamoto_data.py` は、島本町の実データ（水田占有率・
+HANDランク・開発圧(2011-2022)・TWIランク・GI地形スコアのラスタ、
+島本町域(行政界+1kmバッファ)・500mメッシュGI統合v2のベクタ）を取り込み、
+EPSG:4326への再投影・COG化・GeoJSON化を行う。
+
+元データは `data/raw/shimamoto/{raster,vector}/` に配置する想定（Git管理外）。
+
+### データの注意点
+
+- **水田の占有率（shimamoto_paddy_ratio）**：島本町域にクリップされた
+  ファイルがないため、大阪府全域のデータをそのまま使用している。
+- **開発圧 2020-2024**：取得したファイルが破損していたため未収録。
+  再取得でき次第 `RASTER_DEFS` に追加する。
+
 ## 今後のTODO
 
-- [ ] 島本町の実データ（ラスタ・ベクタ）を `data/raw/shimamoto/` に配置し、
-      `ingest_shimamoto_data.py` の `RASTER_DEFS` / `VECTOR_DEFS` に登録
+- [ ] 開発圧2020-2024データの再取得・追加
 - [ ] `ingest_gsi_elevation.py` の `BBOX` を対象範囲に合わせて調整
-- [ ] メッシュデータの属性名がgisdata版と異なる場合、`MESH_SCORES` を調整
 - [ ] Cloudflare R2 / Pages への接続とデプロイ設定

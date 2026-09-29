@@ -32,7 +32,7 @@
 </head>
 <body>
 <div id="panel">
-  <strong>島本町 GIS解析マップ（雛形）</strong>
+  <strong>島本町 GIS解析マップ</strong>
 
   <section>
     <h2>① 表示するレイヤー</h2>
@@ -267,9 +267,7 @@ map.on("error", (e) => {
 
 let dataLayerListenersAttached = false;
 
-// メッシュの色分け対象スコアの定義(gisdata/千葉県版のメッシュ属性名を踏襲した雛形)。
-// 島本町のメッシュデータが同じ属性名で作られる想定だが、実データが届いたら
-// フィールド名・domain(値の範囲)・凡例をあわせて見直すこと。
+// メッシュの色分け対象スコアの定義(gisdata/千葉県版のメッシュ属性名と一致することを確認済み)。
 const MESH_SCORES = {
   priority_rank: {
     label: "優先度ランク",
@@ -394,7 +392,7 @@ async function addDataLayers() {
       }
     }
 
-    const boundary = vectors.find((v) => v.id === "shimamoto_boundary_approx");
+    const boundary = vectors.find((v) => v.id === "shimamoto_boundary");
     if (boundary) {
       map.addSource("shimamoto-boundary", { type: "geojson", data: `data/${boundary.path}` });
       map.addLayer({
