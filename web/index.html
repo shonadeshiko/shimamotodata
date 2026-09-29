@@ -206,15 +206,11 @@ const BASE_LAYERS = [
   {
     id: "old_topo",
     name: "旧版地形図",
-    // gisdata(千葉県版)では関東地方の今昔マップ(kanto)を使っていたが、
-    // 島本町は近畿地方のため別のデータセットが必要。URLが決まったら設定する。
-    // 例: tiles: ["https://ktgis.net/kjmapw/kjtilemap/データセットフォルダ/時期フォルダ/{z}/{x}/{y}.png"],
-    // 注意: MapLibreでTMS方式(Y軸反転)のタイルを使うときは、{y}はそのままにして
-    // scheme: "tms" を指定する({-y}はLeaflet独自の記法でMapLibreでは無効)。
-    tiles: null,
+    // 近畿地方(keihansin)の今昔マップ、2万分の1版。
+    tiles: ["https://ktgis.net/kjmapw/kjtilemap/keihansin/2man/{z}/{x}/{y}.png"],
     scheme: "tms",
     tileSize: 256,
-    attribution: "",
+    attribution: "地図：今昔マップ(京阪神, 2万分の1)",
     maxzoom: 18,
   },
 ];

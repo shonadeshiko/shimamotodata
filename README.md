@@ -71,10 +71,9 @@ python -m http.server 8000
 `BASE_LAYERS` 配列にエントリを1つ追加すると、画面上部のセレクタに
 選択肢が増える仕組みになっている。
 
-「旧版地形図」は、gisdata(千葉県版)では関東地方の今昔マップ
-(ktgis.net、kanto)を使っていたが、**島本町は近畿地方のため別の
-データセットが必要**で、現在は `tiles: null` の未設定状態。
-URLが決まったら `BASE_LAYERS` 内の該当エントリに設定する。
+「旧版地形図」は、近畿地方(keihansin)の今昔マップ・2万分の1版
+（`https://ktgis.net/kjmapw/kjtilemap/keihansin/2man/{z}/{x}/{y}.png`）
+を使用（TMS方式のため `scheme: "tms"` を指定）。
 
 ## メッシュの色分けについて
 
@@ -111,6 +110,5 @@ pushでは実行せず、GitHub Actionsの `Ingest GSI Elevation Data`
 - [ ] 島本町の実データ（ラスタ・ベクタ）を `data/raw/shimamoto/` に配置し、
       `ingest_shimamoto_data.py` の `RASTER_DEFS` / `VECTOR_DEFS` に登録
 - [ ] `ingest_gsi_elevation.py` の `BBOX` を対象範囲に合わせて調整
-- [ ] 旧版地形図（近畿地方版）のタイルURLを調査・設定
 - [ ] メッシュデータの属性名がgisdata版と異なる場合、`MESH_SCORES` を調整
 - [ ] Cloudflare R2 / Pages への接続とデプロイ設定
