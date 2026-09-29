@@ -2,17 +2,17 @@
   "vectors": [
     {
       "id": "shimamoto_boundary",
-      "name": "島本町域（行政界+1kmバッファ）",
-      "description": "島本町の行政界に1kmのバッファを加えた範囲のポリゴン。",
+      "name": "京都・大阪域（行政界）",
+      "description": "京都府・大阪府の行政界ポリゴン(国土数値情報N03)。",
       "path": "vectors/shimamoto_boundary.geojson",
       "feature_count": 1
     },
     {
       "id": "shimamoto_mesh500m_gi",
-      "name": "500mメッシュ GI統合スコア（島本町）",
+      "name": "500mメッシュ GI統合スコア（京都・大阪）",
       "description": "500mメッシュ単位のグリーンインフラ(GI)関連スコア・開発圧・土地被覆割合等の統合データ(v2)。",
       "path": "vectors/shimamoto_mesh500m_gi.geojson",
-      "feature_count": 154
+      "feature_count": 23673
     }
   ]
 }

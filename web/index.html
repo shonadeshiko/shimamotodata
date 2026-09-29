@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>島本町 GIS解析マップ</title>
+<title>京都・大阪 GIS解析マップ</title>
 <link href="https://cdn.jsdelivr.net/npm/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet" />
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4/dist/maplibre-gl.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
@@ -32,7 +32,7 @@
 </head>
 <body>
 <div id="panel">
-  <strong>島本町 GIS解析マップ</strong>
+  <strong>京都・大阪 GIS解析マップ</strong>
 
   <section>
     <h2>① 表示するレイヤー</h2>
@@ -42,7 +42,7 @@
     </label>
     <label>
       <input type="checkbox" id="toggle-mesh" checked />
-      500mメッシュ（島本町）を表示
+      500mメッシュ（京都・大阪）を表示
     </label>
     <label style="margin-left: 18px;">
       色分け項目:
@@ -237,8 +237,8 @@ const defaultBaseLayer = BASE_LAYERS.find((l) => l.tiles) || BASE_LAYERS[0];
 const map = new maplibregl.Map({
   container: "map",
   style: baseLayerStyleSpec(defaultBaseLayer),
-  center: [135.6666, 34.8834],
-  zoom: 13,
+  center: [135.45, 35.0],
+  zoom: 9,
 });
 
 // ベースマップ切り替えセレクタの初期化

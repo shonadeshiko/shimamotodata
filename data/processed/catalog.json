@@ -2,42 +2,42 @@
   "rasters": [
     {
       "id": "shimamoto_paddy_ratio",
-      "name": "水田の占有率（大阪府）",
+      "name": "水田の占有率（京都・大阪）",
       "unit": "比率(0-1)",
-      "description": "グリッド内における水田の占有割合。値が高いほど水田が多い。大阪府域全体のデータ。",
+      "description": "グリッド内における水田の占有割合。値が高いほど水田が多い。京都府・大阪府域全体のデータ。",
       "path": "rasters/shimamoto_paddy_ratio.tif"
     },
     {
       "id": "shimamoto_hand_rank",
-      "name": "HANDランク（島本町）",
+      "name": "HANDランク（京都・大阪）",
       "unit": "ランク(1-5)",
       "description": "最近接水路との比高(HAND)による区分。値が大きいほど水路との比高が小さい(水路に近い)。",
       "path": "rasters/shimamoto_hand_rank.tif"
     },
     {
       "id": "shimamoto_dev_pressure_2020_2024",
-      "name": "開発圧 2020-2024 v2（島本町）",
+      "name": "開発圧 2020-2024 v2（京都・大阪）",
       "unit": "区分(-1,0,+1)",
       "description": "2020年から2024年にかけての開発圧の変化区分(v2データ)。+1:都市化(開発圧増加) 0:変化なし -1:開発後退(緑地化等)。",
       "path": "rasters/shimamoto_dev_pressure_2020_2024.tif"
     },
     {
       "id": "shimamoto_dev_pressure_2011_2022",
-      "name": "開発圧 2011-2022 v2（島本町）",
+      "name": "開発圧 2011-2022 v2（京都・大阪）",
       "unit": "区分(-1,0,+1)",
       "description": "2011年から2022年にかけての開発圧の変化区分(v2データ)。+1:都市化(開発圧増加) 0:変化なし -1:開発後退(緑地化等)。",
       "path": "rasters/shimamoto_dev_pressure_2011_2022.tif"
     },
     {
       "id": "shimamoto_twi_rank",
-      "name": "TWIランク（島本町）",
+      "name": "TWIランク（京都・大阪）",
       "unit": "ランク(1-5)",
       "description": "地形的湿潤度指数(TWI)に基づく浸水・湛水しやすさの目安ランク。値が大きいほど水が集まりやすい地形。",
       "path": "rasters/shimamoto_twi_rank.tif"
     },
     {
       "id": "shimamoto_gi_terrain_score",
-      "name": "GI地形スコア（島本町）",
+      "name": "GI地形スコア（京都・大阪）",
       "unit": "スコア(1.0-5.0)",
       "description": "地形条件から見たグリーンインフラ(GI)適性の統合スコア(連続値)。",
       "path": "rasters/shimamoto_gi_terrain_score.tif",

@@ -1,18 +1,18 @@
 """
-島本町の実データを取り込むパイプライン。
+京都・大阪広域(旧: 島本町単体)の実データを取り込むパイプライン。
 
 - ラスタ: EPSG:4326に再投影し、COG(Cloud Optimized GeoTIFF)に変換
+  (定義の"src"にリストを渡すと、複数ファイル(例: 京都府・大阪府に分かれた
+  データ)をモザイク結合してから処理する)
 - ベクタ: EPSG:4326に変換し、GeoJSONとして書き出し（フロントで直接fetchできる）
 - 生成物は data/processed/catalog.json (ラスタ) と
   data/processed/vectors_catalog.json (ベクタ) に登録される
 
 RASTER_DEFS / VECTOR_DEFS にファイルを追加するだけで、
-新しい島本町データを取り込めるようにしてある。
+新しいデータを取り込めるようにしてある。
 元データは data/raw/shimamoto/{raster,vector}/ に配置する（Git管理外）。
 
-このファイルは gisdata(千葉県版)の ingest_chiba_data.py をベースに
-地域名だけ置き換えた雛形。実データが揃い次第、RASTER_DEFS / VECTOR_DEFS に
-定義を追加していく。
+このファイルは gisdata(千葉県版)の ingest_chiba_data.py をベースにした構成。
 """
 
 import json
@@ -21,6 +21,7 @@ from pathlib import Path
 import geopandas as gpd
 import numpy as np
 import rasterio
+from rasterio.merge import merge as rasterio_merge
 from rasterio.warp import Resampling, calculate_default_transform, reproject
 from rio_cogeo.cogeo import cog_translate
 from rio_cogeo.profiles import cog_profiles
@@ -32,52 +33,52 @@ VECTORS_DIR = PROCESSED_DIR / "vectors"
 
 DST_CRS = "EPSG:4326"
 
-# id, 元ファイル名, 表示名, 単位, 説明, リサンプリング方法
+# id, 元ファイル名(または複数ファイルのリスト=モザイク結合), 表示名, 単位, 説明, リサンプリング方法
 RASTER_DEFS: list[dict] = [
     {
         "id": "shimamoto_paddy_ratio",
-        "src": "05_水田の占有率_27_大阪府.tif",
-        "name": "水田の占有率（大阪府）",
+        "src": ["05_水田の占有率_26_京都府.tif", "05_水田の占有率_27_大阪府.tif"],
+        "name": "水田の占有率（京都・大阪）",
         "unit": "比率(0-1)",
-        "description": "グリッド内における水田の占有割合。値が高いほど水田が多い。大阪府域全体のデータ。",
+        "description": "グリッド内における水田の占有割合。値が高いほど水田が多い。京都府・大阪府域全体のデータ。",
         "resampling": Resampling.bilinear,
     },
     {
         "id": "shimamoto_hand_rank",
-        "src": "HANDランク_島本町.tif",
-        "name": "HANDランク（島本町）",
+        "src": "HANDランク_京都大阪.tif",
+        "name": "HANDランク（京都・大阪）",
         "unit": "ランク(1-5)",
         "description": "最近接水路との比高(HAND)による区分。値が大きいほど水路との比高が小さい(水路に近い)。",
         "resampling": Resampling.nearest,
     },
     {
         "id": "shimamoto_dev_pressure_2020_2024",
-        "src": "開発圧v2_2020-2024_島本町.tif",
-        "name": "開発圧 2020-2024 v2（島本町）",
+        "src": "開発圧v2_2020-2024_京都大阪.tif",
+        "name": "開発圧 2020-2024 v2（京都・大阪）",
         "unit": "区分(-1,0,+1)",
         "description": "2020年から2024年にかけての開発圧の変化区分(v2データ)。+1:都市化(開発圧増加) 0:変化なし -1:開発後退(緑地化等)。",
         "resampling": Resampling.nearest,
     },
     {
         "id": "shimamoto_dev_pressure_2011_2022",
-        "src": "開発圧v2_2011-2022_島本町.tif",
-        "name": "開発圧 2011-2022 v2（島本町）",
+        "src": "開発圧v2_2011-2022_京都大阪.tif",
+        "name": "開発圧 2011-2022 v2（京都・大阪）",
         "unit": "区分(-1,0,+1)",
         "description": "2011年から2022年にかけての開発圧の変化区分(v2データ)。+1:都市化(開発圧増加) 0:変化なし -1:開発後退(緑地化等)。",
         "resampling": Resampling.nearest,
     },
     {
         "id": "shimamoto_twi_rank",
-        "src": "TWIランク_島本町.tif",
-        "name": "TWIランク（島本町）",
+        "src": "TWIランク_京都大阪.tif",
+        "name": "TWIランク（京都・大阪）",
         "unit": "ランク(1-5)",
         "description": "地形的湿潤度指数(TWI)に基づく浸水・湛水しやすさの目安ランク。値が大きいほど水が集まりやすい地形。",
         "resampling": Resampling.nearest,
     },
     {
         "id": "shimamoto_gi_terrain_score",
-        "src": "GI地形スコア_島本町.tif",
-        "name": "GI地形スコア（島本町）",
+        "src": "GI地形スコア_京都大阪.tif",
+        "name": "GI地形スコア（京都・大阪）",
         "unit": "スコア(1.0-5.0)",
         "description": "地形条件から見たグリーンインフラ(GI)適性の統合スコア(連続値)。",
         "resampling": Resampling.bilinear,
@@ -89,17 +90,39 @@ RASTER_DEFS: list[dict] = [
 VECTOR_DEFS: list[dict] = [
     {
         "id": "shimamoto_boundary",
-        "src": "島本町域_行政界+1kmバッファ.gpkg",
-        "name": "島本町域（行政界+1kmバッファ）",
-        "description": "島本町の行政界に1kmのバッファを加えた範囲のポリゴン。",
+        "src": "京都大阪域_N03行政界.gpkg",
+        "name": "京都・大阪域（行政界）",
+        "description": "京都府・大阪府の行政界ポリゴン(国土数値情報N03)。",
     },
     {
         "id": "shimamoto_mesh500m_gi",
-        "src": "メッシュ500m_GI統合v2_島本町.gpkg",
-        "name": "500mメッシュ GI統合スコア（島本町）",
+        "src": "メッシュ500m_GI統合v2_京都大阪.gpkg",
+        "name": "500mメッシュ GI統合スコア（京都・大阪）",
         "description": "500mメッシュ単位のグリーンインフラ(GI)関連スコア・開発圧・土地被覆割合等の統合データ(v2)。",
     },
 ]
+
+
+def merge_rasters(src_paths: list[Path], tmp_dir: Path) -> Path:
+    """複数のラスタ(例: 都道府県ごとに分かれたファイル)をモザイク結合する。"""
+    srcs = [rasterio.open(p) for p in src_paths]
+    try:
+        mosaic, transform = rasterio_merge(srcs)
+        profile = srcs[0].profile.copy()
+        profile.update(
+            {
+                "height": mosaic.shape[1],
+                "width": mosaic.shape[2],
+                "transform": transform,
+            }
+        )
+        merged_path = tmp_dir / "merged.tif"
+        with rasterio.open(merged_path, "w", **profile) as dst:
+            dst.write(mosaic)
+        return merged_path
+    finally:
+        for s in srcs:
+            s.close()
 
 
 def reproject_to_cog(
@@ -177,15 +200,27 @@ def reproject_to_cog(
 def process_rasters() -> list[dict]:
     catalog = []
     for definition in RASTER_DEFS:
-        src_path = RAW_DIR / "raster" / definition["src"]
-        if not src_path.exists():
-            print(f"スキップ（未取得）: {src_path}")
+        src_names = definition["src"]
+        if isinstance(src_names, str):
+            src_names = [src_names]
+        src_paths = [RAW_DIR / "raster" / name for name in src_names]
+
+        missing = [p for p in src_paths if not p.exists()]
+        if missing:
+            print(f"スキップ（未取得）: {missing[0]}")
             continue
 
         dst_path = RASTERS_DIR / f"{definition['id']}.tif"
-        print(f"処理中: {definition['src']} -> {dst_path.name}")
+        print(f"処理中: {', '.join(src_names)} -> {dst_path.name}")
         uint8_scale = definition.get("uint8_scale")
-        reproject_to_cog(src_path, dst_path, definition["resampling"], uint8_scale)
+
+        if len(src_paths) > 1:
+            dst_path.parent.mkdir(parents=True, exist_ok=True)
+            merged_path = merge_rasters(src_paths, dst_path.parent)
+            reproject_to_cog(merged_path, dst_path, definition["resampling"], uint8_scale)
+            merged_path.unlink()
+        else:
+            reproject_to_cog(src_paths[0], dst_path, definition["resampling"], uint8_scale)
 
         entry = {
             "id": definition["id"],
