@@ -15,6 +15,13 @@
       "path": "rasters/shimamoto_hand_rank.tif"
     },
     {
+      "id": "shimamoto_dev_pressure_2020_2024",
+      "name": "開発圧 2020-2024 v2（島本町）",
+      "unit": "区分(-1,0,+1)",
+      "description": "2020年から2024年にかけての開発圧の変化区分(v2データ)。+1:都市化(開発圧増加) 0:変化なし -1:開発後退(緑地化等)。",
+      "path": "rasters/shimamoto_dev_pressure_2020_2024.tif"
+    },
+    {
       "id": "shimamoto_dev_pressure_2011_2022",
       "name": "開発圧 2011-2022 v2（島本町）",
       "unit": "区分(-1,0,+1)",

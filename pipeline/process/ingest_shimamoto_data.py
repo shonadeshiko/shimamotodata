@@ -51,6 +51,14 @@ RASTER_DEFS: list[dict] = [
         "resampling": Resampling.nearest,
     },
     {
+        "id": "shimamoto_dev_pressure_2020_2024",
+        "src": "開発圧v2_2020-2024_島本町.tif",
+        "name": "開発圧 2020-2024 v2（島本町）",
+        "unit": "区分(-1,0,+1)",
+        "description": "2020年から2024年にかけての開発圧の変化区分(v2データ)。+1:都市化(開発圧増加) 0:変化なし -1:開発後退(緑地化等)。",
+        "resampling": Resampling.nearest,
+    },
+    {
         "id": "shimamoto_dev_pressure_2011_2022",
         "src": "開発圧v2_2011-2022_島本町.tif",
         "name": "開発圧 2011-2022 v2（島本町）",
