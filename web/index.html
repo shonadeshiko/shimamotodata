@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>島本町 GIS解析マップ</title>
+<link href="https://cdn.jsdelivr.net/npm/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; font-family: sans-serif; }
+  #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+  #panel {
+    position: absolute; top: 12px; left: 12px; z-index: 1;
+    background: white; padding: 10px 14px; border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3); font-size: 13px; max-width: 320px;
+    max-height: 90vh; overflow-y: auto;
+  }
+  #panel label { display: block; margin-top: 6px; }
+  #panel section { margin-top: 14px; padding-top: 10px; border-top: 1px solid #eee; }
+  #panel section:first-of-type { margin-top: 10px; border-top: none; padding-top: 0; }
+  #panel h2 { font-size: 12px; margin: 0 0 6px; color: #555; }
+  #panel .note { font-size: 11px; color: #888; margin: 4px 0 0; }
+  #raster-results table { border-collapse: collapse; width: 100%; margin-top: 6px; }
+  #raster-results th, #raster-results td { border: 1px solid #ddd; padding: 3px 6px; text-align: right; }
+  #raster-results th:first-child, #raster-results td:first-child { text-align: left; }
+  #legend { margin-top: 8px; font-size: 12px; }
+  #legend .bar { height: 10px; background: linear-gradient(to right, #fff5eb, #7f2704); border-radius: 2px; }
+  #legend .labels { display: flex; justify-content: space-between; margin-top: 2px; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <strong>島本町 GIS解析マップ（雛形）</strong>
+
+  <section>
+    <h2>① 表示するレイヤー</h2>
+    <label>
+      ベースマップ:
+      <select id="base-layer-select"></select>
+    </label>
+    <label>
+      <input type="checkbox" id="toggle-mesh" checked />
+      500mメッシュ（島本町）を表示
+    </label>
+    <label style="margin-left: 18px;">
+      色分け項目:
+      <select id="mesh-score-select"></select>
+    </label>
+    <div id="legend">
+      <div class="bar"></div>
+      <div class="labels" id="legend-labels"><span>低い</span><span>高い</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>② クリック地点の分析</h2>
+    <label>
+      バッファ半径 (m):
+      <input type="number" id="radius" value="300" min="50" max="3000" step="50" />
+    </label>
+    <p class="note">地図上をクリックすると、その地点を中心とした
+    バッファ範囲内の各ラスタの統計値（平均・最小・最大・集計セル数）を計算します。</p>
+    <div id="raster-results"></div>
+  </section>
+
+</div>
+<div id="map"></div>
+
+<script>
+let rasterCatalog = [];
+fetch("data/catalog.json")
+  .then((res) => res.json())
+  .then((json) => { rasterCatalog = json.rasters || []; })
+  .catch(() => {
+    console.warn("ラスタカタログ(data/catalog.json)が見つかりません。パイプライン出力をweb/data/にコピーしてください。");
+  });
+
+// 一度取得したラスタのGeoTIFFイメージをキャッシュし、クリックのたびに
+// 同じファイル(数MB~十数MB)を再取得しないようにする。
+const geotiffImageCache = new Map();
+
+async function loadGeoTiffImage(rasterMeta) {
+  if (geotiffImageCache.has(rasterMeta.path)) {
+    return geotiffImageCache.get(rasterMeta.path);
+  }
+  // GitHub PagesがHTTP Rangeリクエストに対応していないため、
+  // fromUrl(部分取得)ではなく全体を取得してから読み込む方式にする。
+  // ラスタが数十MBを超えるようになったら、Range対応のホスティング
+  // (Cloudflare R2等)への移行を検討する。
+  const buffer = await fetch(`data/${rasterMeta.path}`).then((res) => {
+    if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
+    return res.arrayBuffer();
+  });
+  const tiff = await GeoTIFF.fromArrayBuffer(buffer);
+  const image = await tiff.getImage();
+  geotiffImageCache.set(rasterMeta.path, image);
+  return image;
+}
+
+// 指定バッファ内の1ラスタの統計値(平均・最小・最大・サンプル数)を計算する
+async function computeRasterBufferStats(rasterMeta, bufferPolygon, bufferBbox) {
+  const image = await loadGeoTiffImage(rasterMeta);
+
+  const imgBbox = image.getBoundingBox(); // [minX, minY, maxX, maxY]
+  const width = image.getWidth();
+  const height = image.getHeight();
+  const pixelWidth = (imgBbox[2] - imgBbox[0]) / width;
+  const pixelHeight = (imgBbox[3] - imgBbox[1]) / height;
+  const nodata = image.getGDALNoData();
+
+  let x0 = Math.floor((bufferBbox[0] - imgBbox[0]) / pixelWidth);
+  let x1 = Math.ceil((bufferBbox[2] - imgBbox[0]) / pixelWidth);
+  let y0 = Math.floor((imgBbox[3] - bufferBbox[3]) / pixelHeight);
+  let y1 = Math.ceil((imgBbox[3] - bufferBbox[1]) / pixelHeight);
+
+  x0 = Math.max(0, x0);
+  y0 = Math.max(0, y0);
+  x1 = Math.min(width, x1);
+  y1 = Math.min(height, y1);
+
+  if (x1 <= x0 || y1 <= y0) {
+    return { ...rasterMeta, outOfExtent: true };
+  }
+
+  const data = await image.readRasters({ window: [x0, y0, x1, y1] });
+  const band = data[0];
+  const winWidth = x1 - x0;
+
+  let sum = 0, count = 0, min = Infinity, max = -Infinity;
+  for (let row = 0; row < y1 - y0; row++) {
+    for (let col = 0; col < winWidth; col++) {
+      const value = band[row * winWidth + col];
+      if (nodata !== null && value === nodata) continue;
+
+      const lonC = imgBbox[0] + (x0 + col + 0.5) * pixelWidth;
+      const latC = imgBbox[3] - (y0 + row + 0.5) * pixelHeight;
+      if (!turf.booleanPointInPolygon([lonC, latC], bufferPolygon)) continue;
+
+      // scaleが指定されている場合は保存時にscale倍されているので割り戻す
+      const realValue = rasterMeta.scale ? value / rasterMeta.scale : value;
+
+      sum += realValue;
+      count += 1;
+      if (realValue < min) min = realValue;
+      if (realValue > max) max = realValue;
+    }
+  }
+
+  if (count === 0) return { ...rasterMeta, count: 0 };
+  return { ...rasterMeta, count, mean: sum / count, min, max };
+}
+
+async function calcBufferStatsForAllRasters(lng, lat, radiusMeters) {
+  const point = turf.point([lng, lat]);
+  const bufferPolygon = turf.buffer(point, radiusMeters / 1000, { units: "kilometers" });
+  const bufferBbox = turf.bbox(bufferPolygon);
+
+  const resultsEl = document.getElementById("raster-results");
+  if (rasterCatalog.length === 0) {
+    resultsEl.textContent = "ラスタカタログが未取得です。";
+    return;
+  }
+  resultsEl.textContent = "計算中...";
+
+  const results = await Promise.all(
+    rasterCatalog.map((r) => computeRasterBufferStats(r, bufferPolygon, bufferBbox).catch((err) => ({ ...r, error: err.message })))
+  );
+
+  let html = "<table><tr><th>ラスタ（単位）</th><th>平均</th><th>最小</th><th>最大</th><th>集計セル数</th></tr>";
+  results.forEach((r) => {
+    const label = r.unit ? `${r.name}<br><span style="color:#888;font-weight:normal;">(${r.unit})</span>` : r.name;
+    if (r.error) {
+      html += `<tr><td>${label}</td><td colspan="4">エラー: ${r.error}</td></tr>`;
+    } else if (r.outOfExtent || r.count === 0) {
+      html += `<tr><td>${label}</td><td colspan="4">バッファ範囲がデータ範囲外です</td></tr>`;
+    } else {
+      html += `<tr><td>${label}</td><td>${r.mean.toFixed(2)}</td><td>${r.min.toFixed(2)}</td><td>${r.max.toFixed(2)}</td><td>${r.count}</td></tr>`;
+    }
+  });
+  html += "</table>";
+  resultsEl.innerHTML = html;
+}
+
+// ベースマップの定義。新しいタイル(旧版地形図など)を追加したいときは、
+// この配列に1エントリ追加するだけでセレクタに反映される。
+// tiles を null にしておくと「未設定」として選択肢には出るが無効化される。
+const BASE_LAYERS = [
+  {
+    id: "gsi_pale",
+    name: "地理院地図(淡色)",
+    tiles: ["https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png"],
+    tileSize: 256,
+    attribution: "地図: 国土地理院",
+    maxzoom: 18,
+  },
+  {
+    id: "gsi_std",
+    name: "地理院地図(標準)",
+    tiles: ["https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png"],
+    tileSize: 256,
+    attribution: "地図: 国土地理院",
+    maxzoom: 18,
+  },
+  {
+    id: "old_topo",
+    name: "旧版地形図",
+    // gisdata(千葉県版)では関東地方の今昔マップ(kanto)を使っていたが、
+    // 島本町は近畿地方のため別のデータセットが必要。URLが決まったら設定する。
+    // 例: tiles: ["https://ktgis.net/kjmapw/kjtilemap/データセットフォルダ/時期フォルダ/{z}/{x}/{y}.png"],
+    // 注意: MapLibreでTMS方式(Y軸反転)のタイルを使うときは、{y}はそのままにして
+    // scheme: "tms" を指定する({-y}はLeaflet独自の記法でMapLibreでは無効)。
+    tiles: null,
+    scheme: "tms",
+    tileSize: 256,
+    attribution: "",
+    maxzoom: 18,
+  },
+];
+
+function baseLayerStyleSpec(layer) {
+  return {
+    version: 8,
+    sources: {
+      [layer.id]: {
+        type: "raster",
+        tiles: layer.tiles,
+        tileSize: layer.tileSize || 256,
+        scheme: layer.scheme || "xyz",
+        attribution: layer.attribution || "",
+      },
+    },
+    layers: [{ id: layer.id, type: "raster", source: layer.id }],
+  };
+}
+
+const defaultBaseLayer = BASE_LAYERS.find((l) => l.tiles) || BASE_LAYERS[0];
+
+// 島本町役場付近を中心に表示(実データが揃ったら対象範囲に合わせて調整する)
+const map = new maplibregl.Map({
+  container: "map",
+  style: baseLayerStyleSpec(defaultBaseLayer),
+  center: [135.6666, 34.8834],
+  zoom: 13,
+});
+
+// ベースマップ切り替えセレクタの初期化
+const baseLayerSelect = document.getElementById("base-layer-select");
+BASE_LAYERS.forEach((layer) => {
+  const option = document.createElement("option");
+  option.value = layer.id;
+  option.textContent = layer.name + (layer.tiles ? "" : "（URL未設定）");
+  option.disabled = !layer.tiles;
+  if (layer.id === defaultBaseLayer.id) option.selected = true;
+  baseLayerSelect.appendChild(option);
+});
+baseLayerSelect.addEventListener("change", (e) => {
+  const layer = BASE_LAYERS.find((l) => l.id === e.target.value);
+  if (!layer || !layer.tiles) return;
+  map.setStyle(baseLayerStyleSpec(layer));
+  // "style.load"はこの構成(スプライト等を持たない軽量なスタイル)だと
+  // 発火しないことがあるため、新スタイルの読み込み・タイル取得が
+  // 落ち着いたことを示す"idle"を使ってレイヤーを再構築する。
+  map.once("idle", () => addDataLayers());
+});
+
+map.on("error", (e) => {
+  console.error("MapLibre error:", e && e.error ? e.error : e);
+});
+
+let dataLayerListenersAttached = false;
+
+// メッシュの色分け対象スコアの定義(gisdata/千葉県版のメッシュ属性名を踏襲した雛形)。
+// 島本町のメッシュデータが同じ属性名で作られる想定だが、実データが届いたら
+// フィールド名・domain(値の範囲)・凡例をあわせて見直すこと。
+const MESH_SCORES = {
+  priority_rank: {
+    label: "優先度ランク",
+    domain: [1, 3, 5],
+    colors: ["#edf8e9", "#74c476", "#005a32"],
+    legendLow: "低い",
+    legendHigh: "高い",
+  },
+  gi_conservation_score: {
+    label: "GI保全スコア",
+    domain: [0, 0.1, 0.3],
+    colors: ["#fff5eb", "#e6550d", "#7f2704"],
+    legendLow: "低い",
+    legendHigh: "高い",
+  },
+  gi_pressure_score: {
+    label: "GI開発圧スコア",
+    domain: [0, 0.2, 0.5],
+    colors: ["#f2f0f7", "#9e77c8", "#54278f"],
+    legendLow: "低い",
+    legendHigh: "高い",
+  },
+  urban_frac: {
+    label: "市街地率",
+    domain: [0, 0.5, 1],
+    colors: ["#f7f7f7", "#969696", "#252525"],
+    legendLow: "低い",
+    legendHigh: "高い",
+  },
+  forest_frac: {
+    label: "森林率",
+    domain: [0, 0.5, 1],
+    colors: ["#f7fcf5", "#74c476", "#00441b"],
+    legendLow: "低い",
+    legendHigh: "高い",
+  },
+};
+
+let currentMeshScore = "priority_rank";
+
+function meshFillColorExpression(scoreId) {
+  const cfg = MESH_SCORES[scoreId];
+  return [
+    "interpolate", ["linear"], ["get", scoreId],
+    cfg.domain[0], cfg.colors[0],
+    cfg.domain[1], cfg.colors[1],
+    cfg.domain[2], cfg.colors[2],
+  ];
+}
+
+function updateMeshLegend(scoreId) {
+  const cfg = MESH_SCORES[scoreId];
+  document.querySelector("#legend .bar").style.background =
+    `linear-gradient(to right, ${cfg.colors[0]}, ${cfg.colors[1]}, ${cfg.colors[2]})`;
+  document.getElementById("legend-labels").innerHTML =
+    `<span>${cfg.legendLow}</span><span>${cfg.legendHigh}</span>`;
+}
+
+function setMeshScore(scoreId) {
+  currentMeshScore = scoreId;
+  if (map.getLayer("shimamoto-mesh-fill")) {
+    map.setPaintProperty("shimamoto-mesh-fill", "fill-color", meshFillColorExpression(scoreId));
+  }
+  updateMeshLegend(scoreId);
+}
+
+async function addDataLayers() {
+  try {
+    const vectorsCatalog = await fetch("data/vectors_catalog.json").then((r) => r.json());
+    const vectors = vectorsCatalog.vectors || [];
+
+    const mesh = vectors.find((v) => v.id === "shimamoto_mesh500m_gi");
+    if (mesh) {
+      map.addSource("shimamoto-mesh", { type: "geojson", data: `data/${mesh.path}` });
+      map.addLayer({
+        id: "shimamoto-mesh-fill",
+        type: "fill",
+        source: "shimamoto-mesh",
+        paint: {
+          "fill-color": meshFillColorExpression(currentMeshScore),
+          "fill-opacity": 0.6,
+        },
+      });
+      map.addLayer({
+        id: "shimamoto-mesh-outline",
+        type: "line",
+        source: "shimamoto-mesh",
+        paint: { "line-color": "#999", "line-width": 0.3 },
+      });
+      updateMeshLegend(currentMeshScore);
+
+      if (!dataLayerListenersAttached) {
+        map.on("click", "shimamoto-mesh-fill", (e) => {
+          const p = e.features[0].properties;
+          new maplibregl.Popup()
+            .setLngLat(e.lngLat)
+            .setHTML(
+              `<strong>メッシュ ${p.mesh4_code}</strong><br>
+               GI保全スコア: ${Number(p.gi_conservation_score).toFixed(2)}<br>
+               GI開発圧スコア: ${Number(p.gi_pressure_score).toFixed(2)}<br>
+               優先度ランク: ${p.priority_rank}<br>
+               市街地率: ${Number(p.urban_frac).toFixed(2)} / 森林率: ${Number(p.forest_frac).toFixed(2)}`
+            )
+            .addTo(map);
+        });
+
+        document.getElementById("toggle-mesh").addEventListener("change", (e) => {
+          const visibility = e.target.checked ? "visible" : "none";
+          map.setLayoutProperty("shimamoto-mesh-fill", "visibility", visibility);
+          map.setLayoutProperty("shimamoto-mesh-outline", "visibility", visibility);
+        });
+
+        const meshScoreSelect = document.getElementById("mesh-score-select");
+        Object.entries(MESH_SCORES).forEach(([scoreId, cfg]) => {
+          const option = document.createElement("option");
+          option.value = scoreId;
+          option.textContent = cfg.label;
+          if (scoreId === currentMeshScore) option.selected = true;
+          meshScoreSelect.appendChild(option);
+        });
+        meshScoreSelect.addEventListener("change", (e) => setMeshScore(e.target.value));
+      }
+    }
+
+    const boundary = vectors.find((v) => v.id === "shimamoto_boundary_approx");
+    if (boundary) {
+      map.addSource("shimamoto-boundary", { type: "geojson", data: `data/${boundary.path}` });
+      map.addLayer({
+        id: "shimamoto-boundary-line",
+        type: "line",
+        source: "shimamoto-boundary",
+        paint: { "line-color": "#2166ac", "line-width": 1.5 },
+      });
+    }
+  } catch (err) {
+    console.warn("ベクタカタログ(data/vectors_catalog.json)の読み込みに失敗しました。", err);
+  }
+
+  dataLayerListenersAttached = true;
+}
+
+map.on("load", () => addDataLayers());
+
+map.on("click", (e) => {
+  const { lng, lat } = e.lngLat;
+  const radiusMeters = Number(document.getElementById("radius").value) || 300;
+  calcBufferStatsForAllRasters(lng, lat, radiusMeters);
+});
+</script>
+</body>
+</html>

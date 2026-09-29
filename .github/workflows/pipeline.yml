@@ -1,0 +1,68 @@
+name: GIS Pipeline & Pages Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pipeline/**"
+      - "web/**"
+      - "data/processed/**"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install GDAL system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gdal-bin libgdal-dev
+
+      - name: Install Python deps
+        run: |
+          pip install -r pipeline/requirements.txt
+
+      - name: Run pipeline
+        run: |
+          # 島本町の元データ(data/raw/shimamoto)・国土地理院標高データはGit管理外のため、
+          # CI環境には無い。既存の処理済みデータ(data/processed)はリポジトリに
+          # コミット済みのものをそのまま使う。元データをCIから取得できるようにしたら、
+          # 以下を有効化する。
+          # python pipeline/process/ingest_shimamoto_data.py
+          echo "data/processed の既存コミット済みデータをそのまま使用します"
+
+      # TODO: Cloudflare R2 接続後、data/processed の成果物をアップロードするstepを追加
+      # - name: Upload to R2
+      #   run: aws s3 cp data/processed s3://<bucket> --recursive --endpoint-url ...
+
+      - name: Copy processed data into web (for GitHub Pages配信)
+        run: |
+          mkdir -p web/data
+          cp -r data/processed/* web/data/
+
+      - name: Upload web artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy:
+    needs: pipeline
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

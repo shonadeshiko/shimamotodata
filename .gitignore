@@ -1,0 +1,14 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# 元データ（大容量になりうるためGit管理外。取得はpipeline/rawのスクリプトで再現する）
+data/raw/*
+!data/raw/.gitkeep
+
+# ローカル確認用にコピーした生成物（CIが都度生成するため管理不要）
+web/data/
+
+# OS
+.DS_Store
